@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <link rel="icon" href="data:,">
+  <title>股票平均价格计算器</title>
+  <style>
+    :root {
+      font: 16px/1.5 system-ui, "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: #f1ece4;
+      --ink: #222e38;
+      --muted: #5c625f;
+      --surface: #fffdf9;
+      --surface-soft: #f6f2eb;
+      --line: #e0d9ce;
+      --line-soft: #ece6dd;
+      --control-line: #958d81;
+      --accent: #2b4c65;
+      --accent-hover: #203b50;
+      --accent-soft: #e4ebf1;
+      --accent-line: #a5b5c3;
+      --danger: #923d38;
+      --danger-soft: #fbefec;
+      --danger-hover: #f4dfda;
+      --shadow: #3d3428;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      display: grid; place-items: center; min-height: 100vh; min-height: 100dvh;
+      margin: 0; padding: clamp(12px, 4vw, 32px) 12px;
+      background: radial-gradient(ellipse at 50% 10%, #fbf8f2, transparent 72%);
+    }
+    button, input, select { font: inherit; }
+    button, select { cursor: pointer; }
+    button:disabled { cursor: default; opacity: .48; }
+    button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    main { width: min(100%, 740px); min-width: 0; }
+    .calculator {
+      border: 1px solid var(--line); border-radius: 18px; background: var(--surface);
+      box-shadow: 0 20px 55px color-mix(in srgb, var(--shadow) 10%, transparent),
+        0 2px 8px color-mix(in srgb, var(--shadow) 5%, transparent);
+    }
+    header {
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
+      gap: 12px; padding: clamp(16px, 4vw, 30px); border-radius: 17px 17px 0 0;
+      border-bottom: 1px solid var(--line); color: var(--accent-hover);
+      background: linear-gradient(110deg, #fbf7ef, #efe8dc);
+    }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: clamp(23px, 4.6vw, 34px); font-weight: 740; }
+    h2 { font-size: 20px; }
+    .entry { padding: clamp(12px, 3.6vw, 26px); }
+    #active-name { margin-bottom: 12px; font-weight: 650; overflow-wrap: anywhere; }
+    .ledger { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    table, .totals { font-variant-numeric: tabular-nums; }
+    .col-index { width: 9%; }
+    .col-price { width: 25%; }
+    .col-operator { width: 5%; }
+    .col-quantity { width: 20%; }
+    .col-subtotal { width: 28%; }
+    .col-action { width: 8%; }
+    th, td { padding: 7px 3px; text-align: center; }
+    thead { background: var(--surface-soft); font-size: .875rem; }
+    thead th { padding-block: 10px; white-space: nowrap; }
+    tbody th { color: var(--muted); font-size: .875rem; font-weight: 600; }
+    tbody tr { border-top: 1px solid var(--line-soft); }
+    tbody tr:focus-within { background: #f0f4f7; }
+    .operator { color: var(--muted); font-size: .9rem; }
+    .number, .dialog-input {
+      width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid var(--control-line);
+      border-radius: 6px; background: var(--surface); color: var(--ink);
+    }
+    .number { text-align: right; font-variant-numeric: tabular-nums; }
+    .number::placeholder { color: var(--muted); }
+    .number[aria-invalid="true"] { border-color: var(--danger); background: var(--danger-soft); }
+    .value { text-align: right; overflow-wrap: anywhere; padding-right: 5px; }
+    .subtotal-edit {
+      max-width: 100%; padding: 0 2px; border: 0; border-bottom: 1px dotted var(--accent);
+      background: transparent; color: var(--accent); font: inherit; text-align: right; overflow-wrap: anywhere;
+    }
+    .subtotal-edit:hover { background: var(--accent-soft); }
+    tfoot { border-top: 1px solid var(--line); background: var(--surface-soft); color: var(--accent-hover); font-weight: 700; }
+    tfoot td, tfoot th { padding-block: 9px; overflow-wrap: anywhere; }
+    tfoot th { font-size: .75rem; }
+    .remove {
+      width: 28px; height: 30px; padding: 0; border: 0; border-radius: 6px;
+      background: var(--danger-soft); color: var(--danger); line-height: 1; font-size: 18px;
+    }
+    .remove:hover { background: var(--danger-hover); }
+    .toolbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-top: 14px; }
+    .workspace { display: flex; flex-flow: column; align-items: flex-end; gap: 8px; min-width: 0; }
+    .actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+    .button, .saved-list, summary {
+      min-height: 37px; padding: 6px 10px; border: 1px solid var(--control-line); border-radius: 7px;
+      background: var(--surface); color: var(--ink); font-size: .875rem; font-weight: 630;
+    }
+    .button:hover, summary:hover { background: var(--surface-soft); }
+    .primary { border-color: var(--accent); background: var(--accent); color: white; }
+    .primary:hover { background: var(--accent-hover); }
+    .settings { border-color: var(--control-line); background: var(--surface); color: var(--accent-hover); }
+    .settings:hover { background: var(--surface-soft); }
+    .saved-list { width: min(100%, 196px); font-weight: 500; }
+    .slot-menu { position: relative; }
+    summary { list-style: none; cursor: pointer; }
+    summary::-webkit-details-marker { display: none; }
+    .popover {
+      position: absolute; z-index: 1; top: calc(100% + 6px); right: 0; width: 140px;
+      padding: 4px; border: 1px solid var(--line); border-radius: 8px;
+      background: var(--surface); box-shadow: 0 8px 24px #3d342824;
+    }
+    .popover button { display: block; width: 100%; padding: 7px 9px; border: 0; border-radius: 4px; background: transparent; color: var(--ink); text-align: left; font-size: .875rem; }
+    .popover button:hover:not(:disabled) { background: var(--surface-soft); }
+    .status { margin-top: 8px; font-size: .875rem; color: var(--muted); }
+    .status:empty { display: none; }
+    .totals {
+      display: grid; grid-template-columns: 1.2fr 1fr 1fr; margin: 0;
+      border-top: 1px solid var(--line); border-radius: 0 0 17px 17px; background: var(--surface-soft);
+    }
+    .totals > div { min-width: 0; padding: 15px clamp(8px, 3vw, 22px); }
+    .totals > div + div { border-left: 1px solid var(--line); }
+    .totals dt { margin-bottom: 2px; font-size: .875rem; color: var(--muted); }
+    .totals dd { margin: 0; font-size: clamp(16px, 3.5vw, 27px); font-weight: 700; overflow-wrap: anywhere; }
+    .totals div:first-child { background: var(--accent-soft); border-radius: 0 0 0 17px; color: var(--accent-hover); }
+    .totals div:first-child dt { color: var(--accent); }
+    .totals div:nth-child(2) { border-left-color: var(--accent-line); }
+    dialog {
+      width: min(440px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 22px;
+      border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: var(--surface);
+    }
+    dialog::backdrop { background: #222e386b; }
+    .dialog-content { display: grid; gap: 12px; margin-top: 13px; overflow-wrap: anywhere; }
+    .dialog-content label { display: grid; gap: 4px; }
+    .dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 17px; }
+    .dialog-error { color: var(--danger); font-size: .875rem; }
+    .dialog-error:empty { display: none; }
+    .order-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+    .order-list li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; }
+    @media (max-width: 420px) {
+      th, td { padding-inline: 2px; }
+      .col-index { width: 11%; }
+      .col-subtotal { width: 26%; }
+      .number { padding-inline: 4px; }
+      .value, tfoot { font-size: .875rem; }
+      .remove { width: 22px; }
+      .toolbar .button, summary { padding-inline: 6px; }
+      .unit-quantity { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="calculator" aria-labelledby="title">
+      <header>
+        <h1 id="title">股票平均价格计算器</h1>
+        <button class="button settings" id="settings" type="button">货币设置</button>
+      </header>
+      <div class="entry">
+        <p id="active-name" hidden></p>
+        <div class="ledger">
+          <table aria-label="买入明细">
+            <colgroup>
+              <col class="col-index"><col class="col-price"><col class="col-operator">
+              <col class="col-quantity"><col class="col-operator"><col class="col-subtotal"><col class="col-action">
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col" aria-label="序号"></th>
+                <th scope="col">价格 <span class="currency-unit"></span></th>
+                <th scope="col" aria-label="乘号"></th>
+                <th scope="col">数量 <span class="unit-quantity">(n)</span></th>
+                <th scope="col" aria-label="等号"></th>
+                <th scope="col">小计 <span class="currency-unit"></span></th>
+                <th scope="col" aria-label="行操作"></th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+            <tfoot>
+              <tr><th scope="row">合计</th><td id="table-average">0</td><td>×</td><td id="table-quantity">0</td><td>=</td><td class="value" id="table-amount">0</td><td></td></tr>
+            </tfoot>
+          </table>
+        </div>
+        <div class="toolbar">
+          <button class="button primary" id="add" type="button">＋ 添加行</button>
+          <div class="workspace">
+            <div class="actions">
+              <button class="button" id="save" type="button">保存</button>
+              <button class="button" id="reset" type="button" title="恢复当前记录上次保存的内容">重置</button>
+              <details class="slot-menu" id="menu">
+                <summary>更多 ▾</summary>
+                <div class="popover">
+                  <button type="button" id="new">新建</button>
+                  <button type="button" id="save-as">另存为</button>
+                  <button type="button" id="delete">删除记录</button>
+                  <button type="button" id="order">调整顺序</button>
+                  <button type="button" id="export">导出</button>
+                </div>
+              </details>
+            </div>
+            <select class="saved-list" id="saved" aria-label="已保存的记录"></select>
+          </div>
+        </div>
+        <p id="status" class="status" role="status"></p>
+      </div>
+      <dl class="totals" aria-live="polite" aria-atomic="true">
+        <div><dt>平均价格</dt><dd id="average">—</dd></div>
+        <div><dt>总量</dt><dd id="quantity">—</dd></div>
+        <div><dt>总金额</dt><dd id="amount">—</dd></div>
+      </dl>
+    </section>
+  </main>
+  <template id="row-template">
+    <tr>
+      <th scope="row"></th>
+      <td><input class="number" type="text" inputmode="decimal" placeholder="价格" autocomplete="off" maxlength="66" data-field="price"></td>
+      <td class="operator" aria-hidden="true">×</td>
+      <td><input class="number" type="text" inputmode="decimal" placeholder="数量" autocomplete="off" maxlength="66" data-field="quantity"></td>
+      <td class="operator" aria-hidden="true">=</td>
+      <td class="value"><span class="subtotal"></span><button class="subtotal-edit" type="button" hidden></button></td>
+      <td><button class="remove" type="button" hidden>×</button></td>
+    </tr>
+  </template>
+  <dialog id="dialog" aria-labelledby="dialog-title">
+    <form id="dialog-form">
+      <h2 id="dialog-title"></h2>
+      <div class="dialog-content" id="dialog-content"></div>
+      <p class="dialog-error" id="dialog-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button class="button" id="dialog-cancel" type="button">取消</button>
+        <button class="button" id="dialog-alternate" type="button" hidden></button>
+        <button class="button primary" id="dialog-submit" type="submit"></button>
+      </div>
+    </form>
+  </dialog>
+  <script>
+    'use strict';
+
+    const byId = (id) => document.getElementById(id);
+    const minimumRows = 4;
+    const precision = 12;
+    const scale = 10n ** BigInt(precision);
+    const storageKey = 'stock-average-calculator.v1';
+    const currencyOptions = [['auto', '自动（元）'], ['元', '元'], ['$', '$'], ['€', '€'], ['¥', '¥'], ['円', '円']];
+    const numberFormats = {
+      auto: { label: '自动（1,234,567.89）', group: ',', decimal: '.' },
+      comma: { label: '1,234,567.89', group: ',', decimal: '.' },
+      dot: { label: '1.234.567,89', group: '.', decimal: ',' },
+      space: { label: '1 234 567,89', group: ' ', decimal: ',' },
+      indian: { label: '12,34,567.89', group: ',', decimal: '.' }
+    };
+    const rowsElement = byId('rows');
+    const savedSelect = byId('saved');
+    const menu = byId('menu');
+    const dialog = byId('dialog');
+    const dialogContent = byId('dialog-content');
+    const dialogError = byId('dialog-error');
+    const alternate = byId('dialog-alternate');
+    let submitDialog;
+    let activeName = '';
+    let storageAvailable = true;
+    let data = { prefs: { currency: 'auto', format: 'auto' }, records: [] };
+
+    function blankRow() {
+      return { price: '', quantity: '' };
+    }
+
+    function validateRecords(records) {
+      const number = /^(?:-?\d{1,30}(?:\.\d{1,12})?)?$/;
+      const names = new Set();
+      return Array.isArray(records) && records.every((record) => {
+        if (!record || typeof record.name !== 'string' || !record.name.trim() ||
+            record.name.length > 80 || names.has(record.name) || !Array.isArray(record.rows)) return false;
+        names.add(record.name);
+        return record.rows.length >= minimumRows && record.rows.every((row) =>
+          row && typeof row.price === 'string' && typeof row.quantity === 'string' &&
+          number.test(row.price) && number.test(row.quantity));
+      });
+    }
+
+    try {
+      const stored = JSON.parse(localStorage.getItem(storageKey));
+      if (stored && validateRecords(stored.records)) {
+        data.records = stored.records;
+        const prefs = stored.prefs;
+        if (prefs && currencyOptions.some(([code]) => code === prefs.currency) &&
+            Object.hasOwn(numberFormats, prefs.format)) data.prefs = prefs;
+      }
+    } catch (error) {
+      storageAvailable = error.name === 'SyntaxError';
+    }
+
+    function announce(message) {
+      byId('status').textContent = message;
+    }
+
+    function persist(next) {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(next));
+        data = next;
+        storageAvailable = true;
+        return true;
+      } catch {
+        const message = '浏览器无法保存到本地，请检查存储权限或可用空间。';
+        if (dialog.open) dialogError.textContent = message;
+        else announce(message);
+        return false;
+      }
+    }
+
+    function unit(prefs = data.prefs) {
+      return prefs.currency === 'auto' ? '元' : prefs.currency;
+    }
+
+    function formatNumber(canonical, key = data.prefs.format) {
+      if (canonical === '') return '';
+      const { group, decimal } = numberFormats[key];
+      const [integer, fraction] = canonical.split('.');
+      const sign = integer.startsWith('-') ? '-' : '';
+      const digits = sign ? integer.slice(1) : integer;
+      const grouped = key === 'indian' && digits.length > 3
+        ? digits.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, group) + group + digits.slice(-3)
+        : digits.replace(/\B(?=(\d{3})+(?!\d))/g, group);
+      return sign + grouped + (fraction ? decimal + fraction : '');
+    }
+
+    function parseNumber(raw, { maxInteger = 30, maxFraction = precision } = {}) {
+      const value = raw.normalize('NFKC').trim().replace(/^−/, '-');
+      if (value === '') return '';
+      const key = data.prefs.format;
+      const { group, decimal } = numberFormats[key];
+      const [integer, fraction, extra] = value.split(decimal);
+      if (extra !== undefined || (fraction !== undefined && (!/^\d*$/.test(fraction) || fraction.length > maxFraction))) return null;
+      const plain = integer.replaceAll(group, '');
+      if (integer.includes(group) && formatNumber(plain, key) !== integer) return null;
+      if (!/^-?\d*$/.test(plain) || plain.replace('-', '').length > maxInteger || (!/\d/.test(plain) && !fraction)) return null;
+      const negative = plain.startsWith('-');
+      const whole = (negative ? plain.slice(1) : plain).replace(/^0+(?=\d)/, '') || '0';
+      const decimals = fraction?.replace(/0+$/, '') || '';
+      const sign = negative && (whole !== '0' || decimals) ? '-' : '';
+      return sign + whole + (decimals ? '.' + decimals : '');
+    }
+
+    function formatMoney(value, prefs = data.prefs) {
+      const formatted = formatNumber(value, prefs.format);
+      const symbol = unit(prefs);
+      if (symbol === '元' || symbol === '円') return `${formatted} ${symbol}`;
+      return formatted.startsWith('-') ? `−${symbol}${formatted.slice(1)}` : symbol + formatted;
+    }
+
+    function asFixed(canonical, places = precision) {
+      const negative = canonical.startsWith('-');
+      const [integer, fraction = ''] = (negative ? canonical.slice(1) : canonical).split('.');
+      const value = BigInt(integer + fraction.padEnd(places, '0'));
+      return negative ? -value : value;
+    }
+
+    function asText(value, places, trim = true) {
+      const negative = value < 0n;
+      const digits = (negative ? -value : value).toString().padStart(places + 1, '0');
+      if (places === 0) return (negative ? '-' : '') + digits;
+      const decimal = digits.slice(-places);
+      const fraction = trim ? decimal.replace(/0+$/, '') : decimal;
+      return (negative ? '-' : '') + digits.slice(0, -places) + (fraction ? '.' + fraction : '');
+    }
+
+    function divideRounded(numerator, denominator) {
+      const negative = (numerator < 0n) !== (denominator < 0n);
+      const top = numerator < 0n ? -numerator : numerator;
+      const bottom = denominator < 0n ? -denominator : denominator;
+      const rounded = (top + bottom / 2n) / bottom;
+      return negative ? -rounded : rounded;
+    }
+
+    function rowInputs(row) {
+      return [row.querySelector('[data-field="price"]'), row.querySelector('[data-field="quantity"]')];
+    }
+
+    function appendRow(values = blankRow()) {
+      const row = byId('row-template').content.firstElementChild.cloneNode(true);
+      for (const input of rowInputs(row)) input.value = formatNumber(values[input.dataset.field]);
+      rowsElement.append(row);
+      return row;
+    }
+
+    function labelRows() {
+      Array.from(rowsElement.rows).forEach((row, index) => {
+        const position = index + 1;
+        const [price, quantity] = rowInputs(row);
+        const remove = row.querySelector('.remove');
+        row.cells[0].textContent = position;
+        price.setAttribute('aria-label', `第 ${position} 行价格`);
+        quantity.setAttribute('aria-label', `第 ${position} 行数量`);
+        row.querySelector('.subtotal-edit').setAttribute('aria-label', `编辑第 ${position} 行小计`);
+        remove.setAttribute('aria-label', `删除第 ${position} 行`);
+        remove.hidden = index < minimumRows;
+      });
+    }
+
+    function readRows() {
+      return Array.from(rowsElement.rows, (row) => {
+        const [price, quantity] = rowInputs(row);
+        return { price: parseNumber(price.value), quantity: parseNumber(quantity.value) };
+      });
+    }
+
+    function calculate() {
+      let totalQuantity = 0n;
+      let totalAmount = 0n;
+      let completeRows = 0;
+      let inputPrecision = 0;
+      const entries = readRows();
+      entries.forEach(({ price, quantity }, index) => {
+        const row = rowsElement.rows[index];
+        const [priceInput, quantityInput] = rowInputs(row);
+        priceInput.setAttribute('aria-invalid', String(price === null));
+        quantityInput.setAttribute('aria-invalid', String(quantity === null));
+        let subtotal = '';
+        if (price && quantity) {
+          const count = asFixed(quantity);
+          const amount = asFixed(price) * count;
+          totalQuantity += count;
+          totalAmount += amount;
+          completeRows += 1;
+          inputPrecision = Math.max(inputPrecision, price.split('.')[1]?.length || 0, quantity.split('.')[1]?.length || 0);
+          subtotal = formatNumber(asText(amount, 2 * precision));
+        }
+        const editable = price && price !== '0';
+        const edit = row.querySelector('.subtotal-edit');
+        edit.hidden = !editable;
+        edit.textContent = editable ? subtotal || '填小计' : '';
+        row.querySelector('.subtotal').textContent = editable ? '' : subtotal;
+      });
+
+      let average = '';
+      if (totalQuantity !== 0n) {
+        const amount = totalAmount < 0n ? -totalAmount : totalAmount;
+        const count = totalQuantity < 0n ? -totalQuantity : totalQuantity;
+        const defaultPlaces = amount < 100n * count * scale ? 4 : 2;
+        const places = Math.max(defaultPlaces, inputPrecision);
+        average = asText(divideRounded(totalAmount, totalQuantity * 10n ** BigInt(precision - places)), places, false);
+      }
+
+      const amount = asText(totalAmount, 2 * precision);
+      const quantity = asText(totalQuantity, precision);
+      byId('table-average').textContent = average ? formatNumber(average) : '0';
+      byId('table-quantity').textContent = formatNumber(quantity);
+      byId('table-amount').textContent = formatNumber(amount);
+      byId('average').textContent = average ? formatMoney(average) : '—';
+      byId('quantity').textContent = completeRows ? formatNumber(quantity) : '—';
+      byId('amount').textContent = completeRows ? formatMoney(amount) : '—';
+    }
+
+    function recordFor(name = activeName) {
+      return data.records.find((record) => record.name === name);
+    }
+
+    function refreshSaved() {
+      savedSelect.replaceChildren(new Option(data.records.length ? '选择已保存记录' : '暂无已保存记录', ''));
+      for (const record of data.records) savedSelect.add(new Option(record.name, record.name));
+      savedSelect.value = activeName;
+      savedSelect.disabled = data.records.length === 0;
+      byId('delete').disabled = !activeName;
+      byId('order').disabled = data.records.length < 2;
+      const name = byId('active-name');
+      name.textContent = activeName;
+      name.hidden = !activeName;
+    }
+
+    function loadRecord(name = '') {
+      activeName = name;
+      const entries = recordFor(name)?.rows || Array.from({ length: minimumRows }, blankRow);
+      rowsElement.replaceChildren();
+      for (const entry of entries) appendRow(entry);
+      labelRows();
+      refreshSaved();
+      calculate();
+      announce('');
+    }
+
+    function openDialog({ title, body, action, onSubmit, secondary, onSecondary }) {
+      byId('dialog-title').textContent = title;
+      byId('dialog-submit').textContent = action;
+      dialogContent.replaceChildren(...body);
+      dialogError.textContent = '';
+      submitDialog = onSubmit;
+      alternate.hidden = !secondary;
+      alternate.textContent = secondary || '';
+      alternate.onclick = onSecondary || null;
+      if (!dialog.open) dialog.showModal();
+      (dialogContent.querySelector('input:not([type="file"]), select') || byId('dialog-cancel')).focus();
+    }
+
+    function paragraph(text) {
+      const element = document.createElement('p');
+      element.textContent = text;
+      return element;
+    }
+
+    function field(label, control) {
+      const element = document.createElement('label');
+      control.classList.add('dialog-input');
+      element.append(label, control);
+      return element;
+    }
+
+    function editSubtotal(button) {
+      const [price, quantity] = rowInputs(button.closest('tr'));
+      const priceValue = asFixed(parseNumber(price.value));
+      const quantityValue = parseNumber(quantity.value);
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.inputMode = 'decimal';
+      if (quantityValue) input.value = formatNumber(asText(priceValue * asFixed(quantityValue), 2 * precision));
+      openDialog({
+        title: '按小计计算数量', body: [field('小计', input)], action: '应用',
+        onSubmit() {
+          const subtotal = parseNumber(input.value, { maxInteger: 60, maxFraction: 2 * precision });
+          if (!subtotal) {
+            dialogError.textContent = '请输入有效的小计金额。';
+            return;
+          }
+          const computed = asText(divideRounded(asFixed(subtotal, 2 * precision), priceValue), precision);
+          const formatted = formatNumber(computed);
+          if (parseNumber(formatted) === null) {
+            dialogError.textContent = '反算出的数量超出输入范围。';
+            return;
+          }
+          quantity.value = formatted;
+          calculate();
+          dialog.close();
+        }
+      });
+    }
+
+    function validateDraft(message) {
+      const invalid = rowsElement.querySelector('[aria-invalid="true"]');
+      if (!invalid) return true;
+      announce(message);
+      invalid.focus();
+      return false;
+    }
+
+    function saveDraft(name, entries) {
+      const records = [...data.records];
+      const index = records.findIndex((record) => record.name === name);
+      const record = { name, rows: entries };
+      if (index < 0) records.push(record);
+      else records[index] = record;
+      if (!persist({ ...data, records })) return false;
+      activeName = name;
+      refreshSaved();
+      announce(`已保存「${name}」。`);
+      return true;
+    }
+
+    function saveCurrent({ asNew = false, afterSave } = {}) {
+      const message = '请先修正标红的数值。';
+      if (!validateDraft(message)) {
+        if (dialog.open) dialogError.textContent = message;
+        return;
+      }
+      const entries = readRows();
+      function finish(name) {
+        if (!saveDraft(name, entries)) return;
+        if (dialog.open) dialog.close();
+        afterSave?.();
+      }
+      if (activeName && !asNew) {
+        finish(activeName);
+        return;
+      }
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.maxLength = 80;
+      input.placeholder = '例如：第一笔持仓';
+      openDialog({
+        title: '另存为', body: [field('记录名称', input)], action: '保存',
+        onSubmit() {
+          const name = input.value.trim();
+          if (!name || recordFor(name)) {
+            dialogError.textContent = name ? '这个名称已存在，请使用其他名称。' : '请输入记录名称。';
+            input.focus();
+            return;
+          }
+          finish(name);
+        }
+      });
+    }
+
+    function switchRecord(name) {
+      savedSelect.value = activeName;
+      if (name === activeName) return;
+      const stored = recordFor()?.rows;
+      const draft = readRows();
+      const changed = stored ? JSON.stringify(stored) !== JSON.stringify(draft)
+        : draft.some(({ price, quantity }) => price !== '' || quantity !== '');
+      if (!changed) {
+        loadRecord(name);
+        return;
+      }
+      function discard() {
+        dialog.close();
+        loadRecord(name);
+      }
+      openDialog({
+        title: '当前内容尚未保存', body: [paragraph('切换记录前，可以先保存当前输入。')],
+        action: '先保存', onSubmit: () => saveCurrent({ afterSave: () => loadRecord(name) }),
+        secondary: '放弃修改', onSecondary: discard
+      });
+    }
+
+    byId('settings').addEventListener('click', () => {
+      if (!validateDraft('请先修正标红的数值，再调整记数法。')) return;
+      const symbols = document.createElement('select');
+      for (const [code, label] of currencyOptions) symbols.add(new Option(label, code));
+      symbols.value = data.prefs.currency;
+      const formats = document.createElement('select');
+      for (const [code, format] of Object.entries(numberFormats)) formats.add(new Option(format.label, code));
+      formats.value = data.prefs.format;
+      const preview = paragraph('');
+      const selected = () => ({ currency: symbols.value, format: formats.value });
+      const showPreview = () => { preview.textContent = `预览 ${formatMoney('1234567.89', selected())}`; };
+      for (const select of [symbols, formats]) select.addEventListener('change', showPreview);
+      showPreview();
+      openDialog({
+        title: '货币设置', body: [field('货币符号', symbols), field('记数法', formats), preview], action: '保存',
+        onSubmit() {
+          const entries = readRows();
+          if (!persist({ ...data, prefs: selected() })) return;
+          entries.forEach((entry, index) => {
+            for (const input of rowInputs(rowsElement.rows[index])) {
+              input.value = formatNumber(entry[input.dataset.field]);
+            }
+          });
+          updateUnits();
+          calculate();
+          dialog.close();
+        }
+      });
+    });
+
+    function updateUnits() {
+      for (const el of document.querySelectorAll('.currency-unit')) el.textContent = `(${unit()})`;
+    }
+
+    byId('new').addEventListener('click', () => {
+      if (activeName) {
+        switchRecord('');
+        return;
+      }
+      const draft = readRows();
+      if (!draft.some(({ price, quantity }) => price !== '' || quantity !== '')) {
+        loadRecord();
+        return;
+      }
+      openDialog({
+        title: '新建记录', body: [paragraph('当前内容尚未保存。')], action: '保存后新建',
+        onSubmit: () => saveCurrent({ afterSave: () => loadRecord() }),
+        secondary: '直接新建', onSecondary() { dialog.close(); loadRecord(); }
+      });
+    });
+
+    byId('save').addEventListener('click', () => saveCurrent());
+    byId('save-as').addEventListener('click', () => saveCurrent({ asNew: true }));
+    byId('reset').addEventListener('click', () => {
+      const name = activeName;
+      loadRecord(name);
+      announce(name ? '已恢复上次保存的内容。' : '已清空输入。');
+    });
+    savedSelect.addEventListener('change', () => switchRecord(savedSelect.value));
+
+    byId('delete').addEventListener('click', () => {
+      const name = activeName;
+      openDialog({
+        title: '删除记录', body: [paragraph(`确定删除「${name}」吗？`)], action: '删除',
+        onSubmit() {
+          const records = data.records.filter((record) => record.name !== name);
+          if (!persist({ ...data, records })) return;
+          dialog.close();
+          loadRecord(records[0]?.name);
+          announce(`已删除「${name}」。`);
+        }
+      });
+    });
+
+    byId('order').addEventListener('click', () => {
+      const records = [...data.records];
+      const list = document.createElement('ol');
+      list.className = 'order-list';
+      function render(focusIndex, focusDirection) {
+        list.replaceChildren();
+        records.forEach(({ name }, index) => {
+          const item = document.createElement('li');
+          const label = document.createElement('span');
+          label.textContent = name;
+          item.append(label);
+          for (const [direction, text] of [[-1, '上移'], [1, '下移']]) {
+            const destination = index + direction;
+            const button = document.createElement('button');
+            button.className = 'button';
+            button.type = 'button';
+            button.textContent = text;
+            button.setAttribute('aria-label', `${text}「${name}」`);
+            button.disabled = destination < 0 || destination >= records.length;
+            button.addEventListener('click', () => {
+              [records[index], records[destination]] = [records[destination], records[index]];
+              render(destination, direction);
+            });
+            item.append(button);
+          }
+          list.append(item);
+        });
+        if (focusIndex !== undefined) {
+          const buttons = list.children[focusIndex].querySelectorAll('button');
+          const wanted = buttons[focusDirection < 0 ? 0 : 1];
+          (wanted.disabled ? Array.from(buttons).find((button) => !button.disabled) : wanted)?.focus();
+        }
+      }
+      render();
+      openDialog({
+        title: '调整顺序', body: [list], action: '保存',
+        onSubmit() {
+          if (!persist({ ...data, records })) return;
+          refreshSaved();
+          dialog.close();
+          announce('已保存记录顺序。');
+        }
+      });
+    });
+
+    byId('export').addEventListener('click', () => {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = '.json,application/json';
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        try {
+          const backup = JSON.parse(await file.text());
+          if (!dialog.open || !dialogContent.contains(fileInput)) return;
+          if (backup.version !== 1 || !validateRecords(backup.records)) throw new Error('Invalid backup');
+          const existing = new Set(data.records.map((record) => record.name));
+          const imported = backup.records.filter((record) => !existing.has(record.name));
+          if (!persist({ ...data, records: [...data.records, ...imported] })) return;
+          refreshSaved();
+          dialog.close();
+          announce(`已导入 ${imported.length} 条记录，跳过 ${backup.records.length - imported.length} 条同名记录。`);
+        } catch {
+          if (dialogContent.contains(fileInput)) dialogError.textContent = '无法读取此备份，请选择计算器导出的 JSON 文件。';
+          fileInput.value = '';
+        }
+      });
+      openDialog({
+        title: '导出备份', body: [paragraph('把已保存的记录下载为 JSON，也可从备份导入记录。'), field('导入备份（跳过同名记录）', fileInput)],
+        action: '下载备份', onSubmit() {
+          const backup = JSON.stringify({ version: 1, records: data.records }, null, 2);
+          const url = URL.createObjectURL(new Blob([backup], { type: 'application/json' }));
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = '股票平均价格计算器-备份.json';
+          document.body.append(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          dialog.close();
+          announce('已下载备份。');
+        }
+      });
+    });
+
+    byId('dialog-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      submitDialog();
+    });
+    byId('dialog-cancel').addEventListener('click', () => dialog.close());
+    document.addEventListener('click', (event) => {
+      if (!menu.contains(event.target) || event.target.closest('.popover button')) menu.open = false;
+    });
+    menu.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && menu.open) {
+        menu.open = false;
+        menu.querySelector('summary').focus();
+      }
+    });
+    rowsElement.addEventListener('input', () => {
+      announce('');
+      calculate();
+    });
+    rowsElement.addEventListener('focusout', (event) => {
+      const input = event.target;
+      if (!input.matches('.number')) return;
+      const parsed = parseNumber(input.value);
+      if (parsed !== null) input.value = formatNumber(parsed);
+    });
+    rowsElement.addEventListener('click', (event) => {
+      const subtotal = event.target.closest('.subtotal-edit');
+      if (subtotal && !subtotal.hidden) {
+        editSubtotal(subtotal);
+        return;
+      }
+      const remove = event.target.closest('.remove');
+      if (!remove) return;
+      const row = remove.closest('tr');
+      const next = row.nextElementSibling || row.previousElementSibling;
+      row.remove();
+      labelRows();
+      calculate();
+      rowInputs(next)[0].focus();
+    });
+    byId('add').addEventListener('click', () => {
+      const row = appendRow();
+      labelRows();
+      rowInputs(row)[0].focus();
+    });
+
+    updateUnits();
+    loadRecord(data.records[0]?.name);
+    if (!storageAvailable) announce('本地存储不可用，仍可使用计算功能。');
+  </script>
+</body>
+</html>
