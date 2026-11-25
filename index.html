@@ -1,61 +1,150 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light">
+  <meta name="color-scheme" content="light dark">
   <link rel="icon" href="data:,">
   <title>股票平均价格计算器</title>
+  <script>
+    const themeStorageKey = 'stock-average-calculator.theme';
+    try {
+      if (localStorage.getItem(themeStorageKey) === 'dark') document.documentElement.dataset.theme = 'dark';
+    } catch {
+      // Default to light when browser storage is unavailable.
+    }
+  </script>
   <style>
     :root {
-      font: 16px/1.5 system-ui, "Microsoft YaHei", sans-serif;
-      color: var(--ink);
-      background: #f1ece4;
-      --ink: #222e38;
-      --muted: #5c625f;
-      --surface: #fffdf9;
-      --surface-soft: #f6f2eb;
-      --line: #e0d9ce;
-      --line-soft: #ece6dd;
-      --control-line: #958d81;
-      --accent: #2b4c65;
-      --accent-hover: #203b50;
-      --accent-soft: #e4ebf1;
-      --accent-line: #a5b5c3;
+      font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color-scheme: light;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --page: #f8f9fa;
+      --surface: #ffffff;
+      --surface-soft: #f1f3f5;
+      --ink: #1f2937;
+      --muted: #626b78;
+      --line: #e5e7eb;
+      --control-line: #858c98;
+      --gold: #b48524;
+      --gold-text: #8c6415;
+      --gold-glow: #b4852426;
+      --gold-line: #d4b46a;
+      --gold-surface: #fdfaf2;
+      --gold-hover: #f7efd9;
+      --gold-pressed: #efe3c3;
       --danger: #923d38;
       --danger-soft: #fbefec;
       --danger-hover: #f4dfda;
-      --shadow: #3d3428;
+      --shadow: #0000000d;
+      --popover-shadow: #0000001f;
+      --backdrop: #1f29376b;
+      --button-shadow: 0 2px 8px #b48c3226;
+      --page-glow: var(--gold-glow);
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --page: #09090b;
+      --surface: #121214;
+      --surface-soft: #18181b;
+      --ink: #f4f4f5;
+      --muted: #a1a1aa;
+      --line: #27272a;
+      --control-line: #6a6a73;
+      --gold: #e6c875;
+      --gold-text: #e6c875;
+      --gold-glow: #e6c87526;
+      --gold-line: #e6c87580;
+      --gold-surface: #28231a;
+      --gold-hover: #352e20;
+      --gold-pressed: #3f3625;
+      --danger: #f3a2a0;
+      --danger-soft: #321e21;
+      --danger-hover: #44262a;
+      --shadow: #00000066;
+      --popover-shadow: #00000080;
+      --backdrop: #09090bb3;
+      --button-shadow: inset 0 1px 0 #ffffff1a, 0 4px 12px #0000004d;
+      --page-glow: #d4af370d;
     }
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
     body {
       display: grid; place-items: center; min-height: 100vh; min-height: 100dvh;
       margin: 0; padding: clamp(12px, 4vw, 32px) 12px;
-      background: radial-gradient(ellipse at 50% 10%, #fbf8f2, transparent 72%);
+      color: var(--ink);
+      background-color: var(--page);
+      background-image: radial-gradient(circle at 50% 0%, var(--page-glow), transparent 50%);
     }
     button, input, select { font: inherit; }
     button, select { cursor: pointer; }
     button:disabled { cursor: default; opacity: .48; }
     button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
-      outline: 2px solid var(--accent);
+      outline: 2px solid var(--gold-text);
       outline-offset: 2px;
     }
-    main { width: min(100%, 740px); min-width: 0; }
+    main { display: grid; gap: 2rem; width: min(100%, 740px); min-width: 0; }
     .calculator {
       border: 1px solid var(--line); border-radius: 18px; background: var(--surface);
-      box-shadow: 0 20px 55px color-mix(in srgb, var(--shadow) 10%, transparent),
-        0 2px 8px color-mix(in srgb, var(--shadow) 5%, transparent);
+      box-shadow: 0 4px 20px var(--shadow);
     }
-    header {
-      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
-      gap: 12px; padding: clamp(16px, 4vw, 30px); border-radius: 17px 17px 0 0;
-      border-bottom: 1px solid var(--line); color: var(--accent-hover);
-      background: linear-gradient(110deg, #fbf7ef, #efe8dc);
+    .page-header {
+      display: flex; justify-content: space-between; align-items: flex-end;
+      gap: 12px; padding-bottom: 1.5rem; border-bottom: 1px solid var(--line);
     }
+    .page-heading { display: grid; gap: .4rem; min-width: 0; }
     h1, h2, p { margin: 0; }
-    h1 { font-size: clamp(23px, 4.6vw, 34px); font-weight: 740; }
+    h1 {
+      display: flex; align-items: center; gap: .75rem;
+      font-size: 1.5rem; line-height: 1.25; font-weight: 600;
+    }
+    h1::before { content: ''; flex: 0 0 4px; height: 20px; border-radius: 2px; background: var(--gold); }
+    .page-subtitle {
+      margin-left: 1rem; color: var(--muted); font-size: .75rem; font-weight: 600;
+      letter-spacing: .1em; text-transform: uppercase;
+    }
     h2 { font-size: 20px; }
+    .theme-toggle {
+      position: relative; display: flex; align-items: center; justify-content: space-between;
+      flex: 0 0 76px; height: 34px; padding: 3px; border: 1px solid var(--line);
+      border-radius: 50px; background: var(--surface-soft); box-shadow: inset 0 2px 4px var(--shadow);
+      user-select: none;
+    }
+    .theme-icon {
+      position: relative; display: grid; width: 26px; height: 26px; place-items: center;
+      font: 14px/1 "Segoe UI Symbol", sans-serif; transition: opacity .4s ease;
+    }
+    .theme-slider {
+      position: absolute; inset: 3px auto auto 3px; width: 26px; height: 26px; border-radius: 50%;
+      background: var(--surface); box-shadow: 0 2px 5px var(--shadow);
+      transition: transform .5s cubic-bezier(.25, .8, .25, 1);
+    }
+    .theme-sun { color: #f59e0b; }
+    .theme-moon { color: #818cf8; opacity: .4; }
+    [data-theme="dark"] .theme-slider { transform: translateX(42px); }
+    [data-theme="dark"] .theme-sun { opacity: .4; }
+    [data-theme="dark"] .theme-moon { opacity: 1; }
+    ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+    ::view-transition-old(root) { z-index: 1; }
+    ::view-transition-new(root) { z-index: 2; animation: theme-reveal 2.2s cubic-bezier(.2, .8, .2, 1) forwards; }
+    @keyframes theme-reveal {
+      from { clip-path: circle(0% at var(--theme-x, 50%) var(--theme-y, 50%)); }
+      to { clip-path: circle(150% at var(--theme-x, 50%) var(--theme-y, 50%)); }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      body { transition: background-color 1s ease, color 1s ease; }
+      .theme-fade body { transition-duration: 1.2s; }
+      .calculator, .page-header, .page-subtitle, thead, tbody tr, tbody th, tfoot, .operator, .number, .dialog-input,
+      .button, .saved-list, summary, .popover, .subtotal-edit, .remove, .theme-toggle,
+      .totals, .totals > div, .totals dt, .totals dd, dialog {
+        transition: background-color 1s ease, border-color 1s ease, color 1s ease, box-shadow 1s ease;
+      }
+      .primary { transition-duration: .2s; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .theme-icon, .theme-slider { transition: none; }
+      ::view-transition-new(root) { animation: none; }
+    }
     .entry { padding: clamp(12px, 3.6vw, 26px); }
     #active-name { margin-bottom: 12px; font-weight: 650; overflow-wrap: anywhere; }
     .ledger { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
@@ -71,23 +160,25 @@
     thead { background: var(--surface-soft); font-size: .875rem; }
     thead th { padding-block: 10px; white-space: nowrap; }
     tbody th { color: var(--muted); font-size: .875rem; font-weight: 600; }
-    tbody tr { border-top: 1px solid var(--line-soft); }
-    tbody tr:focus-within { background: #f0f4f7; }
+    tbody tr { border-top: 1px solid var(--line); }
+    tbody tr:focus-within { background: var(--gold-surface); }
     .operator { color: var(--muted); font-size: .9rem; }
     .number, .dialog-input {
       width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid var(--control-line);
-      border-radius: 6px; background: var(--surface); color: var(--ink);
+      border-radius: 6px; background: var(--surface-soft); color: var(--ink);
     }
+    .number, .value, .totals dd { font-family: var(--font-mono); }
     .number { text-align: right; font-variant-numeric: tabular-nums; }
     .number::placeholder { color: var(--muted); }
+    .number:focus { border-color: var(--gold-text); box-shadow: 0 0 0 2px var(--gold-glow); }
     .number[aria-invalid="true"] { border-color: var(--danger); background: var(--danger-soft); }
     .value { text-align: right; overflow-wrap: anywhere; padding-right: 5px; }
     .subtotal-edit {
-      max-width: 100%; padding: 0 2px; border: 0; border-bottom: 1px dotted var(--accent);
-      background: transparent; color: var(--accent); font: inherit; text-align: right; overflow-wrap: anywhere;
+      max-width: 100%; padding: 0 2px; border: 0; border-bottom: 1px dotted var(--gold-text);
+      background: transparent; color: var(--gold-text); font: inherit; text-align: right; overflow-wrap: anywhere;
     }
-    .subtotal-edit:hover { background: var(--accent-soft); }
-    tfoot { border-top: 1px solid var(--line); background: var(--surface-soft); color: var(--accent-hover); font-weight: 700; }
+    .subtotal-edit:hover { background: var(--gold-hover); }
+    tfoot { border-top: 1px solid var(--line); background: var(--surface-soft); color: var(--ink); font-weight: 700; }
     tfoot td, tfoot th { padding-block: 9px; overflow-wrap: anywhere; }
     tfoot th { font-size: .75rem; }
     .remove {
@@ -95,26 +186,27 @@
       background: var(--danger-soft); color: var(--danger); line-height: 1; font-size: 18px;
     }
     .remove:hover { background: var(--danger-hover); }
-    .toolbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-top: 14px; }
-    .workspace { display: flex; flex-flow: column; align-items: flex-end; gap: 8px; min-width: 0; }
-    .actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+    .toolbar {
+      display: grid; grid-template-columns: auto minmax(0, 1fr); justify-items: start; align-items: start;
+      gap: 8px 10px; margin-top: 14px;
+    }
+    .actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; justify-self: end; }
     .button, .saved-list, summary {
       min-height: 37px; padding: 6px 10px; border: 1px solid var(--control-line); border-radius: 7px;
       background: var(--surface); color: var(--ink); font-size: .875rem; font-weight: 630;
     }
     .button:hover, summary:hover { background: var(--surface-soft); }
-    .primary { border-color: var(--accent); background: var(--accent); color: white; }
-    .primary:hover { background: var(--accent-hover); }
-    .settings { border-color: var(--control-line); background: var(--surface); color: var(--accent-hover); }
-    .settings:hover { background: var(--surface-soft); }
-    .saved-list { width: min(100%, 196px); font-weight: 500; }
+    .primary { border-color: var(--gold-line); background: var(--gold-surface); color: var(--gold-text); box-shadow: var(--button-shadow); }
+    .primary:hover { border-color: var(--gold); background: var(--gold-hover); }
+    .primary:active { background: var(--gold-pressed); box-shadow: none; }
+    .saved-list { width: min(100%, 196px); justify-self: end; font-weight: 500; }
     .slot-menu { position: relative; }
     summary { list-style: none; cursor: pointer; }
     summary::-webkit-details-marker { display: none; }
     .popover {
       position: absolute; z-index: 1; top: calc(100% + 6px); right: 0; width: 140px;
       padding: 4px; border: 1px solid var(--line); border-radius: 8px;
-      background: var(--surface); box-shadow: 0 8px 24px #3d342824;
+      background: var(--surface); box-shadow: 0 8px 24px var(--popover-shadow);
     }
     .popover button { display: block; width: 100%; padding: 7px 9px; border: 0; border-radius: 4px; background: transparent; color: var(--ink); text-align: left; font-size: .875rem; }
     .popover button:hover:not(:disabled) { background: var(--surface-soft); }
@@ -128,14 +220,14 @@
     .totals > div + div { border-left: 1px solid var(--line); }
     .totals dt { margin-bottom: 2px; font-size: .875rem; color: var(--muted); }
     .totals dd { margin: 0; font-size: clamp(16px, 3.5vw, 27px); font-weight: 700; overflow-wrap: anywhere; }
-    .totals div:first-child { background: var(--accent-soft); border-radius: 0 0 0 17px; color: var(--accent-hover); }
-    .totals div:first-child dt { color: var(--accent); }
-    .totals div:nth-child(2) { border-left-color: var(--accent-line); }
+    .totals > div:first-child { background: var(--gold-surface); border-radius: 0 0 0 17px; }
+    .totals > div:first-child dd { color: var(--gold-text); text-shadow: 0 0 10px var(--gold-glow); }
+    .totals > div:nth-child(2) { border-left-color: var(--gold-line); }
     dialog {
       width: min(440px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 22px;
       border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: var(--surface);
     }
-    dialog::backdrop { background: #222e386b; }
+    dialog::backdrop { background: var(--backdrop); }
     .dialog-content { display: grid; gap: 12px; margin-top: 13px; overflow-wrap: anywhere; }
     .dialog-content label { display: grid; gap: 4px; }
     .dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 17px; }
@@ -143,6 +235,15 @@
     .dialog-error:empty { display: none; }
     .order-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
     .order-list li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; }
+    @media (max-width: 600px) {
+      main { gap: 1.2rem; }
+      .page-header { align-items: center; padding-bottom: .75rem; }
+      .page-heading { gap: .2rem; }
+      h1 { gap: .5rem; font-size: 1.15rem; }
+      h1::before { flex-basis: 3px; height: 15px; }
+      .page-subtitle { margin-left: .7rem; font-size: .65rem; }
+      .theme-toggle { transform: scale(.9); transform-origin: right center; }
+    }
     @media (max-width: 420px) {
       th, td { padding-inline: 2px; }
       .col-index { width: 11%; }
@@ -157,11 +258,18 @@
 </head>
 <body>
   <main>
-    <section class="calculator" aria-labelledby="title">
-      <header>
+    <header class="page-header">
+      <div class="page-heading">
         <h1 id="title">股票平均价格计算器</h1>
-        <button class="button settings" id="settings" type="button">货币设置</button>
-      </header>
+        <p class="page-subtitle" lang="en">Stock Average Price</p>
+      </div>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="深色主题" aria-pressed="false" title="切换主题">
+        <span class="theme-slider" aria-hidden="true"></span>
+        <span class="theme-icon theme-sun" aria-hidden="true">☀︎</span>
+        <span class="theme-icon theme-moon" aria-hidden="true">☾</span>
+      </button>
+    </header>
+    <section class="calculator" aria-labelledby="title">
       <div class="entry">
         <p id="active-name" hidden></p>
         <div class="ledger">
@@ -189,23 +297,22 @@
         </div>
         <div class="toolbar">
           <button class="button primary" id="add" type="button">＋ 添加行</button>
-          <div class="workspace">
-            <div class="actions">
-              <button class="button" id="save" type="button">保存</button>
-              <button class="button" id="reset" type="button" title="恢复当前记录上次保存的内容">重置</button>
-              <details class="slot-menu" id="menu">
-                <summary>更多 ▾</summary>
-                <div class="popover">
-                  <button type="button" id="new">新建</button>
-                  <button type="button" id="save-as">另存为</button>
-                  <button type="button" id="delete">删除记录</button>
-                  <button type="button" id="order">调整顺序</button>
-                  <button type="button" id="export">导出</button>
-                </div>
-              </details>
-            </div>
-            <select class="saved-list" id="saved" aria-label="已保存的记录"></select>
+          <div class="actions">
+            <button class="button" id="save" type="button">保存</button>
+            <button class="button" id="reset" type="button" title="恢复当前记录上次保存的内容">重置</button>
+            <details class="slot-menu" id="menu">
+              <summary>更多 ▾</summary>
+              <div class="popover">
+                <button type="button" id="new">新建</button>
+                <button type="button" id="save-as">另存为</button>
+                <button type="button" id="delete">删除记录</button>
+                <button type="button" id="order">调整顺序</button>
+                <button type="button" id="export">导出</button>
+              </div>
+            </details>
           </div>
+          <button class="button" id="settings" type="button">货币设置</button>
+          <select class="saved-list" id="saved" aria-label="已保存的记录"></select>
         </div>
         <p id="status" class="status" role="status"></p>
       </div>
@@ -243,6 +350,42 @@
     'use strict';
 
     const byId = (id) => document.getElementById(id);
+    const themeRoot = document.documentElement;
+    const themeToggle = byId('theme-toggle');
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    let theme = themeRoot.dataset.theme;
+    let themeTransition;
+
+    function applyTheme() {
+      themeRoot.dataset.theme = theme;
+      themeToggle.setAttribute('aria-pressed', String(theme === 'dark'));
+    }
+
+    applyTheme();
+    themeToggle.addEventListener('click', (event) => {
+      theme = theme === 'dark' ? 'light' : 'dark';
+      try {
+        localStorage.setItem(themeStorageKey, theme);
+      } catch {
+        // The selected theme still works for this page load.
+      }
+
+      themeTransition?.skipTransition();
+      if (typeof document.startViewTransition !== 'function' || reducedMotion.matches) {
+        themeRoot.classList.toggle('theme-fade', !reducedMotion.matches);
+        applyTheme();
+        return;
+      }
+
+      const rect = themeToggle.getBoundingClientRect();
+      const x = event.detail ? event.clientX : rect.left + rect.width / 2;
+      const y = event.detail ? event.clientY : rect.top + rect.height / 2;
+      themeRoot.style.setProperty('--theme-x', `${x}px`);
+      themeRoot.style.setProperty('--theme-y', `${y}px`);
+      themeTransition = document.startViewTransition(applyTheme);
+      themeTransition.ready.catch(() => {});
+    });
+
     const minimumRows = 4;
     const precision = 12;
     const scale = 10n ** BigInt(precision);
