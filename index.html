@@ -36,6 +36,8 @@
       --danger: #923d38;
       --danger-soft: #fbefec;
       --danger-hover: #f4dfda;
+      --gain: #ad293b;
+      --loss: #166b50;
       --shadow: #0000000d;
       --popover-shadow: #0000001f;
       --backdrop: #1f29376b;
@@ -61,6 +63,8 @@
       --danger: #f3a2a0;
       --danger-soft: #321e21;
       --danger-hover: #44262a;
+      --gain: #f6a2ab;
+      --loss: #8cdfbc;
       --shadow: #00000066;
       --popover-shadow: #00000080;
       --backdrop: #09090bb3;
@@ -136,7 +140,7 @@
       .theme-fade body { transition-duration: 1.2s; }
       .calculator, .page-header, .page-subtitle, thead, tbody tr, tbody th, tfoot, .operator, .number, .dialog-input,
       .button, .saved-list, summary, .popover, .subtotal-edit, .remove, .theme-toggle,
-      .totals, .totals > div, .totals dt, .totals dd, dialog {
+      .totals, .totals > div, .totals dt, .totals dd, .quote-panel, dialog {
         transition: background-color 1s ease, border-color 1s ease, color 1s ease, box-shadow 1s ease;
       }
       .primary { transition-duration: .2s; }
@@ -199,7 +203,7 @@
     .primary { border-color: var(--gold-line); background: var(--gold-surface); color: var(--gold-text); box-shadow: var(--button-shadow); }
     .primary:hover { border-color: var(--gold); background: var(--gold-hover); }
     .primary:active { background: var(--gold-pressed); box-shadow: none; }
-    .saved-list { width: min(100%, 196px); justify-self: end; font-weight: 500; }
+    .saved-list { grid-column: 2; width: min(100%, 196px); justify-self: end; font-weight: 500; }
     .slot-menu { position: relative; }
     summary { list-style: none; cursor: pointer; }
     summary::-webkit-details-marker { display: none; }
@@ -220,9 +224,27 @@
     .totals > div + div { border-left: 1px solid var(--line); }
     .totals dt { margin-bottom: 2px; font-size: .875rem; color: var(--muted); }
     .totals dd { margin: 0; font-size: clamp(16px, 3.5vw, 27px); font-weight: 700; overflow-wrap: anywhere; }
+    .amount-unit { display: inline-block; font: 600 .75em/1.2 system-ui, "Microsoft YaHei", sans-serif; white-space: nowrap; }
     .totals > div:first-child { background: var(--gold-surface); border-radius: 0 0 0 17px; }
     .totals > div:first-child dd { color: var(--gold-text); text-shadow: 0 0 10px var(--gold-glow); }
     .totals > div:nth-child(2) { border-left-color: var(--gold-line); }
+    .cost-totals, .cost-totals > div:first-child { border-radius: 0; }
+    .quote-panel { border-top: 1px solid var(--line); }
+    .quote-form {
+      display: grid; grid-template-columns: auto minmax(0, 220px) auto; align-items: center; justify-content: start;
+      gap: 8px; padding: 13px clamp(12px, 3.6vw, 26px) 0;
+    }
+    .quote-form label { font-size: .875rem; font-weight: 630; }
+    .quote-form input { min-height: 37px; font-size: .875rem; }
+    .quote-form input[aria-invalid="true"] { border-color: var(--danger); background: var(--danger-soft); }
+    .quote-form button { white-space: nowrap; }
+    .quote-status { margin: 6px clamp(12px, 3.6vw, 26px) 12px; color: var(--muted); font-size: .8125rem; overflow-wrap: anywhere; }
+    .valuation-totals > div:first-child { background: transparent; }
+    .valuation-totals > div:nth-child(2) { border-left-color: var(--line); }
+    .valuation-totals > div:first-child dd { color: var(--ink); text-shadow: none; }
+    #current-price { font-size: clamp(.875rem, 2vw, 1rem); font-weight: 600; }
+    .totals dd[data-direction="gain"] { color: var(--gain); }
+    .totals dd[data-direction="loss"] { color: var(--loss); }
     dialog {
       width: min(440px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 22px;
       border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: var(--surface);
@@ -253,6 +275,8 @@
       .remove { width: 22px; }
       .toolbar .button, summary { padding-inline: 6px; }
       .unit-quantity { display: none; }
+      .quote-form { grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+      .quote-form label { grid-column: 1 / -1; }
     }
   </style>
 </head>
@@ -281,11 +305,11 @@
             <thead>
               <tr>
                 <th scope="col" aria-label="序号"></th>
-                <th scope="col">价格 <span class="currency-unit"></span></th>
+                <th scope="col">价格 (<span class="market-unit">元</span>)</th>
                 <th scope="col" aria-label="乘号"></th>
                 <th scope="col">数量 <span class="unit-quantity">(n)</span></th>
                 <th scope="col" aria-label="等号"></th>
-                <th scope="col">小计 <span class="currency-unit"></span></th>
+                <th scope="col">小计 (<span class="market-unit">元</span>)</th>
                 <th scope="col" aria-label="行操作"></th>
               </tr>
             </thead>
@@ -311,16 +335,31 @@
               </div>
             </details>
           </div>
-          <button class="button" id="settings" type="button">货币设置</button>
           <select class="saved-list" id="saved" aria-label="已保存的记录"></select>
         </div>
         <p id="status" class="status" role="status"></p>
       </div>
-      <dl class="totals" aria-live="polite" aria-atomic="true">
+      <dl class="totals cost-totals" aria-live="polite" aria-atomic="true">
         <div><dt>平均价格</dt><dd id="average">—</dd></div>
         <div><dt>总量</dt><dd id="quantity">—</dd></div>
         <div><dt>总金额</dt><dd id="amount">—</dd></div>
       </dl>
+      <section class="quote-panel" aria-label="持仓盈亏">
+        <form class="quote-form" id="quote-form" novalidate>
+          <label for="stock-code">股票代码</label>
+          <input class="dialog-input" id="stock-code" type="text" placeholder="600519 / 00700 / AAPL" autocomplete="off" spellcheck="false" maxlength="16">
+          <button class="button primary" type="submit">获取行情</button>
+        </form>
+        <p class="quote-status" id="quote-status" role="status">输入代码联网获取报价，也可手动填写现价。</p>
+        <dl class="totals valuation-totals">
+          <div>
+            <dt><label for="current-price">现价 (<span class="market-unit">元</span>)</label></dt>
+            <dd><input class="number" id="current-price" type="text" inputmode="decimal" placeholder="手动输入" autocomplete="off" maxlength="66"></dd>
+          </div>
+          <div><dt>浮动盈亏</dt><dd id="profit-amount" aria-live="polite">—</dd></div>
+          <div><dt>盈亏率</dt><dd id="profit-percent" aria-live="polite">—</dd></div>
+        </dl>
+      </section>
     </section>
   </main>
   <template id="row-template">
@@ -390,14 +429,6 @@
     const precision = 12;
     const scale = 10n ** BigInt(precision);
     const storageKey = 'stock-average-calculator.v1';
-    const currencyOptions = [['auto', '自动（元）'], ['元', '元'], ['$', '$'], ['€', '€'], ['¥', '¥'], ['円', '円']];
-    const numberFormats = {
-      auto: { label: '自动（1,234,567.89）', group: ',', decimal: '.' },
-      comma: { label: '1,234,567.89', group: ',', decimal: '.' },
-      dot: { label: '1.234.567,89', group: '.', decimal: ',' },
-      space: { label: '1 234 567,89', group: ' ', decimal: ',' },
-      indian: { label: '12,34,567.89', group: ',', decimal: '.' }
-    };
     const rowsElement = byId('rows');
     const savedSelect = byId('saved');
     const menu = byId('menu');
@@ -405,10 +436,17 @@
     const dialogContent = byId('dialog-content');
     const dialogError = byId('dialog-error');
     const alternate = byId('dialog-alternate');
+    const stockCode = byId('stock-code');
+    const currentPrice = byId('current-price');
+    const quoteStatus = byId('quote-status');
     let submitDialog;
     let activeName = '';
     let storageAvailable = true;
-    let data = { prefs: { currency: 'auto', format: 'auto' }, records: [] };
+    let data = { records: [] };
+    let liveTicker;
+    let lastQuote;
+    let quoteRequest;
+    let quoteTimer;
 
     function blankRow() {
       return { price: '', quantity: '' };
@@ -420,6 +458,10 @@
       return Array.isArray(records) && records.every((record) => {
         if (!record || typeof record.name !== 'string' || !record.name.trim() ||
             record.name.length > 80 || names.has(record.name) || !Array.isArray(record.rows)) return false;
+        if (record.symbol !== undefined && (typeof record.symbol !== 'string' ||
+            (record.symbol && parseTicker(record.symbol)?.symbol !== record.symbol))) return false;
+        if (record.manualPrice !== undefined &&
+            (typeof record.manualPrice !== 'string' || !number.test(record.manualPrice) || record.manualPrice.startsWith('-'))) return false;
         names.add(record.name);
         return record.rows.length >= minimumRows && record.rows.every((row) =>
           row && typeof row.price === 'string' && typeof row.quantity === 'string' &&
@@ -429,12 +471,7 @@
 
     try {
       const stored = JSON.parse(localStorage.getItem(storageKey));
-      if (stored && validateRecords(stored.records)) {
-        data.records = stored.records;
-        const prefs = stored.prefs;
-        if (prefs && currencyOptions.some(([code]) => code === prefs.currency) &&
-            Object.hasOwn(numberFormats, prefs.format)) data.prefs = prefs;
-      }
+      if (stored && validateRecords(stored.records)) data.records = stored.records;
     } catch (error) {
       storageAvailable = error.name === 'SyntaxError';
     }
@@ -457,31 +494,19 @@
       }
     }
 
-    function unit(prefs = data.prefs) {
-      return prefs.currency === 'auto' ? '元' : prefs.currency;
-    }
-
-    function formatNumber(canonical, key = data.prefs.format) {
-      if (canonical === '') return '';
-      const { group, decimal } = numberFormats[key];
+    function formatNumber(canonical) {
       const [integer, fraction] = canonical.split('.');
-      const sign = integer.startsWith('-') ? '-' : '';
-      const digits = sign ? integer.slice(1) : integer;
-      const grouped = key === 'indian' && digits.length > 3
-        ? digits.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, group) + group + digits.slice(-3)
-        : digits.replace(/\B(?=(\d{3})+(?!\d))/g, group);
-      return sign + grouped + (fraction ? decimal + fraction : '');
+      const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      return grouped + (fraction ? '.' + fraction : '');
     }
 
     function parseNumber(raw, { maxInteger = 30, maxFraction = precision } = {}) {
       const value = raw.normalize('NFKC').trim().replace(/^−/, '-');
       if (value === '') return '';
-      const key = data.prefs.format;
-      const { group, decimal } = numberFormats[key];
-      const [integer, fraction, extra] = value.split(decimal);
+      const [integer, fraction, extra] = value.split('.');
       if (extra !== undefined || (fraction !== undefined && (!/^\d*$/.test(fraction) || fraction.length > maxFraction))) return null;
-      const plain = integer.replaceAll(group, '');
-      if (integer.includes(group) && formatNumber(plain, key) !== integer) return null;
+      const plain = integer.replaceAll(',', '');
+      if (integer.includes(',') && formatNumber(plain) !== integer) return null;
       if (!/^-?\d*$/.test(plain) || plain.replace('-', '').length > maxInteger || (!/\d/.test(plain) && !fraction)) return null;
       const negative = plain.startsWith('-');
       const whole = (negative ? plain.slice(1) : plain).replace(/^0+(?=\d)/, '') || '0';
@@ -490,11 +515,105 @@
       return sign + whole + (decimals ? '.' + decimals : '');
     }
 
-    function formatMoney(value, prefs = data.prefs) {
-      const formatted = formatNumber(value, prefs.format);
-      const symbol = unit(prefs);
-      if (symbol === '元' || symbol === '円') return `${formatted} ${symbol}`;
-      return formatted.startsWith('-') ? `−${symbol}${formatted.slice(1)}` : symbol + formatted;
+    function parseTicker(raw) {
+      if (typeof raw !== 'string') return null;
+      const code = raw.normalize('NFKC').trim().toUpperCase()
+        .replace(/^(SH|SZ|BJ|HK)[. :]+/, '$1')
+        .replace(/^(\d{1,6})\.(SH|SZ|BJ|HK)$/, '$2$1');
+      const mainland = /^(SH|SZ|BJ)?(\d{6})$/.exec(code);
+      if (mainland) {
+        const [, exchange, digits] = mainland;
+        const market = exchange || (/^(4|8|92)/.test(digits) ? 'BJ' : /^[569]/.test(digits) ? 'SH' : /^[0123]/.test(digits) ? 'SZ' : '');
+        if (!market) return null;
+        let unit = '元';
+        if (market === 'SH' && digits.startsWith('900')) unit = '美元';
+        if (market === 'SZ' && digits.startsWith('200')) unit = '港元';
+        return { key: market.toLowerCase() + digits, symbol: market + digits, unit, timezone: '北京时间' };
+      }
+      const hongKong = /^(?:HK(\d{1,5})|(\d{5}))$/.exec(code);
+      if (hongKong) {
+        const digits = (hongKong[1] || hongKong[2]).padStart(5, '0');
+        return { key: 'hk' + digits, symbol: 'HK' + digits, unit: '港元', timezone: '香港时间' };
+      }
+      const american = code.replace(/^US[. :]+/, '').replace('-', '.');
+      if (!/^[A-Z]{1,6}(?:\.[A-Z]{1,2})?$/.test(american)) return null;
+      return { key: 'us' + american, symbol: 'US:' + american, unit: '美元', timezone: '美东时间' };
+    }
+
+    function readCurrentPrice() {
+      const price = parseNumber(currentPrice.value);
+      return price?.startsWith('-') ? null : price;
+    }
+
+    function quoteTime(raw = '') {
+      const value = raw.trim().replaceAll('/', '-');
+      return value.replace(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)$/, '$1-$2-$3 $4:$5:$6');
+    }
+
+    function showQuoteStatus(message) {
+      if (quoteStatus.textContent !== message) quoteStatus.textContent = message;
+    }
+
+    function showManualStatus() {
+      const price = readCurrentPrice();
+      showQuoteStatus(price === null ? '请输入有效的非负现价。' : price ? '使用手动现价。' : '输入代码联网获取报价，也可手动填写现价。');
+    }
+
+    function stopQuotes() {
+      clearTimeout(quoteTimer);
+      quoteRequest?.abort();
+      quoteRequest = undefined;
+      liveTicker = undefined;
+    }
+
+    function startQuotes(ticker) {
+      stopQuotes();
+      liveTicker = ticker;
+      refreshQuote(ticker);
+    }
+
+    async function refreshQuote(ticker) {
+      if (!lastQuote) showQuoteStatus('正在获取腾讯证券报价…');
+      const request = new AbortController();
+      quoteRequest = request;
+      const timeout = setTimeout(() => request.abort(), 9000);
+      try {
+        const url = `https://qt.gtimg.cn/?q=${encodeURIComponent(ticker.key)}&_=${Date.now()}`;
+        const response = await fetch(url, { signal: request.signal, cache: 'no-store', credentials: 'omit' });
+        if (!response.ok) throw new Error('Quote request failed');
+        const raw = new TextDecoder('gbk').decode(await response.arrayBuffer()).trim();
+        if (quoteRequest !== request) return;
+        const prefix = `v_${ticker.key}="`;
+        const line = raw.split(/\r?\n/).find((entry) => entry.startsWith(prefix) && entry.endsWith('";'));
+        const fields = line?.slice(prefix.length, -2).split('~') || [];
+        const price = parseNumber(fields[3] || '');
+        if (!fields[1] || !price || price === '0' || price.startsWith('-')) throw new Error('No stock price');
+        const time = quoteTime(fields[30]);
+        const stamp = time ? ` · ${time}（${ticker.timezone}）` : '';
+        lastQuote = `腾讯证券 · ${fields[1]}${stamp}`;
+        currentPrice.value = formatNumber(price);
+        showQuoteStatus(`${lastQuote} · 行情可能延迟`);
+        calculate();
+      } catch {
+        if (quoteRequest !== request) return;
+        const message = lastQuote ? `刷新失败，沿用上次报价 · ${lastQuote}`
+          : currentPrice.value.trim() ? '获取行情失败，仍使用手动现价。'
+          : '暂无报价。请检查代码或网络，也可手动填写现价。';
+        showQuoteStatus(message);
+      } finally {
+        clearTimeout(timeout);
+        if (quoteRequest === request) {
+          quoteRequest = undefined;
+          quoteTimer = setTimeout(() => refreshQuote(ticker), 30000);
+        }
+      }
+    }
+
+    function readValuation() {
+      return {
+        symbol: parseTicker(stockCode.value)?.symbol || stockCode.value.trim(),
+        manualPrice: lastQuote ? '' : readCurrentPrice()
+      };
     }
 
     function asFixed(canonical, places = precision) {
@@ -592,12 +711,44 @@
 
       const amount = asText(totalAmount, 2 * precision);
       const quantity = asText(totalQuantity, precision);
+      const unit = parseTicker(stockCode.value)?.unit || '元';
+      for (const label of document.querySelectorAll('.market-unit')) {
+        if (label.textContent !== unit) label.textContent = unit;
+      }
       byId('table-average').textContent = average ? formatNumber(average) : '0';
       byId('table-quantity').textContent = formatNumber(quantity);
       byId('table-amount').textContent = formatNumber(amount);
-      byId('average').textContent = average ? formatMoney(average) : '—';
+      showResult('average', average ? formatNumber(average) : '—', unit);
       byId('quantity').textContent = completeRows ? formatNumber(quantity) : '—';
-      byId('amount').textContent = completeRows ? formatMoney(amount) : '—';
+      showResult('amount', completeRows ? formatNumber(amount) : '—', unit);
+
+      const price = readCurrentPrice();
+      currentPrice.setAttribute('aria-invalid', String(price === null));
+      const profit = price && totalQuantity !== 0n ? asFixed(price) * totalQuantity - totalAmount : null;
+      const cost = totalAmount < 0n ? -totalAmount : totalAmount;
+      const cents = profit === null ? null : divideRounded(profit, scale * scale / 100n);
+      const percent = profit === null || cost === 0n ? null : divideRounded(profit * 10000n, cost);
+      showProfit('profit-amount', cents, '', unit);
+      showProfit('profit-percent', percent, '%');
+    }
+
+    function showResult(id, text, unit) {
+      const result = byId(id);
+      const hasUnit = unit && text !== '—';
+      if (result.textContent === (hasUnit ? `${text} ${unit}` : text)) return result;
+      if (hasUnit) {
+        const label = document.createElement('span');
+        label.className = 'amount-unit';
+        label.textContent = unit;
+        result.replaceChildren(`${text} `, label);
+      } else result.textContent = text;
+      return result;
+    }
+
+    function showProfit(id, value, suffix, unit) {
+      const sign = value === null || value === 0n ? '' : value > 0n ? 'gain' : 'loss';
+      const text = value === null ? '—' : (sign === 'gain' ? '+' : '') + formatNumber(asText(value, 2, false)) + suffix;
+      showResult(id, text, unit).dataset.direction = sign;
     }
 
     function recordFor(name = activeName) {
@@ -618,13 +769,22 @@
 
     function loadRecord(name = '') {
       activeName = name;
-      const entries = recordFor(name)?.rows || Array.from({ length: minimumRows }, blankRow);
+      const record = recordFor(name);
+      const entries = record?.rows || Array.from({ length: minimumRows }, blankRow);
+      stopQuotes();
+      lastQuote = undefined;
+      const ticker = parseTicker(record?.symbol);
+      stockCode.value = ticker?.symbol || '';
+      stockCode.removeAttribute('aria-invalid');
+      currentPrice.value = formatNumber(record?.manualPrice || '');
       rowsElement.replaceChildren();
       for (const entry of entries) appendRow(entry);
       labelRows();
       refreshSaved();
       calculate();
       announce('');
+      if (ticker && !currentPrice.value) startQuotes(ticker);
+      else showManualStatus();
     }
 
     function openDialog({ title, body, action, onSubmit, secondary, onSecondary }) {
@@ -683,20 +843,24 @@
     }
 
     function validateDraft(message) {
-      const invalid = rowsElement.querySelector('[aria-invalid="true"]');
+      const valuation = readValuation();
+      const invalidTicker = valuation.symbol && !parseTicker(valuation.symbol);
+      stockCode.setAttribute('aria-invalid', String(Boolean(invalidTicker)));
+      const invalid = rowsElement.querySelector('[aria-invalid="true"]') ||
+        (invalidTicker ? stockCode : valuation.manualPrice === null ? currentPrice : null);
       if (!invalid) return true;
       announce(message);
       invalid.focus();
       return false;
     }
 
-    function saveDraft(name, entries) {
+    function saveDraft(name, entries, valuation) {
       const records = [...data.records];
       const index = records.findIndex((record) => record.name === name);
-      const record = { name, rows: entries };
+      const record = { name, rows: entries, ...valuation };
       if (index < 0) records.push(record);
       else records[index] = record;
-      if (!persist({ ...data, records })) return false;
+      if (!persist({ records })) return false;
       activeName = name;
       refreshSaved();
       announce(`已保存「${name}」。`);
@@ -710,8 +874,9 @@
         return;
       }
       const entries = readRows();
+      const valuation = readValuation();
       function finish(name) {
-        if (!saveDraft(name, entries)) return;
+        if (!saveDraft(name, entries, valuation)) return;
         if (dialog.open) dialog.close();
         afterSave?.();
       }
@@ -737,14 +902,18 @@
       });
     }
 
+    function draftChanged(record) {
+      const rows = readRows();
+      const { symbol, manualPrice } = readValuation();
+      if (symbol !== (record?.symbol || '') || manualPrice !== (record?.manualPrice || '')) return true;
+      return record ? JSON.stringify(record.rows) !== JSON.stringify(rows)
+        : rows.some(({ price, quantity }) => price !== '' || quantity !== '');
+    }
+
     function switchRecord(name) {
       savedSelect.value = activeName;
       if (name === activeName) return;
-      const stored = recordFor()?.rows;
-      const draft = readRows();
-      const changed = stored ? JSON.stringify(stored) !== JSON.stringify(draft)
-        : draft.some(({ price, quantity }) => price !== '' || quantity !== '');
-      if (!changed) {
+      if (!draftChanged(recordFor())) {
         loadRecord(name);
         return;
       }
@@ -759,47 +928,12 @@
       });
     }
 
-    byId('settings').addEventListener('click', () => {
-      if (!validateDraft('请先修正标红的数值，再调整记数法。')) return;
-      const symbols = document.createElement('select');
-      for (const [code, label] of currencyOptions) symbols.add(new Option(label, code));
-      symbols.value = data.prefs.currency;
-      const formats = document.createElement('select');
-      for (const [code, format] of Object.entries(numberFormats)) formats.add(new Option(format.label, code));
-      formats.value = data.prefs.format;
-      const preview = paragraph('');
-      const selected = () => ({ currency: symbols.value, format: formats.value });
-      const showPreview = () => { preview.textContent = `预览 ${formatMoney('1234567.89', selected())}`; };
-      for (const select of [symbols, formats]) select.addEventListener('change', showPreview);
-      showPreview();
-      openDialog({
-        title: '货币设置', body: [field('货币符号', symbols), field('记数法', formats), preview], action: '保存',
-        onSubmit() {
-          const entries = readRows();
-          if (!persist({ ...data, prefs: selected() })) return;
-          entries.forEach((entry, index) => {
-            for (const input of rowInputs(rowsElement.rows[index])) {
-              input.value = formatNumber(entry[input.dataset.field]);
-            }
-          });
-          updateUnits();
-          calculate();
-          dialog.close();
-        }
-      });
-    });
-
-    function updateUnits() {
-      for (const el of document.querySelectorAll('.currency-unit')) el.textContent = `(${unit()})`;
-    }
-
     byId('new').addEventListener('click', () => {
       if (activeName) {
         switchRecord('');
         return;
       }
-      const draft = readRows();
-      if (!draft.some(({ price, quantity }) => price !== '' || quantity !== '')) {
+      if (!draftChanged()) {
         loadRecord();
         return;
       }
@@ -825,7 +959,7 @@
         title: '删除记录', body: [paragraph(`确定删除「${name}」吗？`)], action: '删除',
         onSubmit() {
           const records = data.records.filter((record) => record.name !== name);
-          if (!persist({ ...data, records })) return;
+          if (!persist({ records })) return;
           dialog.close();
           loadRecord(records[0]?.name);
           announce(`已删除「${name}」。`);
@@ -870,7 +1004,7 @@
       openDialog({
         title: '调整顺序', body: [list], action: '保存',
         onSubmit() {
-          if (!persist({ ...data, records })) return;
+          if (!persist({ records })) return;
           refreshSaved();
           dialog.close();
           announce('已保存记录顺序。');
@@ -891,7 +1025,7 @@
           if (backup.version !== 1 || !validateRecords(backup.records)) throw new Error('Invalid backup');
           const existing = new Set(data.records.map((record) => record.name));
           const imported = backup.records.filter((record) => !existing.has(record.name));
-          if (!persist({ ...data, records: [...data.records, ...imported] })) return;
+          if (!persist({ records: [...data.records, ...imported] })) return;
           refreshSaved();
           dialog.close();
           announce(`已导入 ${imported.length} 条记录，跳过 ${backup.records.length - imported.length} 条同名记录。`);
@@ -963,7 +1097,40 @@
       rowInputs(row)[0].focus();
     });
 
-    updateUnits();
+    byId('quote-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const ticker = parseTicker(stockCode.value);
+      stockCode.setAttribute('aria-invalid', String(!ticker));
+      if (!ticker) {
+        showQuoteStatus('请输入有效的股票代码，例如 600519、00700 或 AAPL。');
+        stockCode.focus();
+        return;
+      }
+      stockCode.value = ticker.symbol;
+      calculate();
+      startQuotes(ticker);
+    });
+    stockCode.addEventListener('input', () => {
+      stockCode.removeAttribute('aria-invalid');
+      if (liveTicker && liveTicker.key !== parseTicker(stockCode.value)?.key) {
+        if (lastQuote) currentPrice.value = '';
+        stopQuotes();
+        lastQuote = undefined;
+      }
+      if (!liveTicker) showManualStatus();
+      calculate();
+    });
+    currentPrice.addEventListener('input', () => {
+      stopQuotes();
+      lastQuote = undefined;
+      showManualStatus();
+      calculate();
+    });
+    currentPrice.addEventListener('blur', () => {
+      const price = readCurrentPrice();
+      if (price !== null) currentPrice.value = formatNumber(price);
+    });
+
     loadRecord(data.records[0]?.name);
     if (!storageAvailable) announce('本地存储不可用，仍可使用计算功能。');
   </script>
